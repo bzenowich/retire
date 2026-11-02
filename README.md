@@ -2,6 +2,8 @@
 
 A desktop (wxPython + Plotly) year-by-year retirement planning model.
 
+![Projection: account balances with the optimized withdrawal and Roth conversion strategy](docs/screenshots/projection-balances.png)
+
 ## Setup
 
 ```bash
@@ -15,6 +17,20 @@ python3 -m venv --system-site-packages .venv
 ```
 
 Without `python3-wxgtk-webview4.0` the app still works; each chart opens in your web browser instead.
+
+## Screenshots
+
+All screenshots use the built-in example plan (File → Load example plan), after Optimize strategy has run.
+
+| | |
+|---|---|
+| ![Household](docs/screenshots/household.png) **Household**: investors and assumptions | ![Accounts](docs/screenshots/accounts.png) **Accounts**: balances, tax type and allocation |
+| ![Cash Flow](docs/screenshots/cashflow.png) **Cash Flow**: income, expenses, investments and ladders | ![Cash flow chart](docs/screenshots/projection-cashflow.png) **Projection**: cash flow, with the strategy search results |
+| ![Taxes](docs/screenshots/projection-taxes.png) **Projection**: taxes and Roth conversions | ![Monte Carlo](docs/screenshots/monte-carlo.png) **Monte Carlo**: net worth percentile bands |
+| ![Historical](docs/screenshots/historical.png) **Historical**: every start year since 1928 | ![Roth explorer](docs/screenshots/roth-explorer.png) **Roth explorer**: conversion strategies compared |
+| ![Social Security](docs/screenshots/social-security.png) **Social Security**: claiming-age heatmap for both spouses | ![Compare plans](docs/screenshots/compare.png) **Compare plans**: base plan vs. a what-if copy |
+
+To regenerate them: `xvfb-run -a -s "-screen 0 1400x900x24" .venv/bin/python tools/screenshots.py`
 
 ## Using it
 
