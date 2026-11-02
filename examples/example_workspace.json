@@ -1,0 +1,316 @@
+{
+  "version": 1,
+  "plans": [
+    {
+      "name": "Base plan",
+      "people": [
+        {
+          "name": "Alex",
+          "dob": "1968-03-10",
+          "retirement_date": "2029-01-01",
+          "life_expectancy": 92,
+          "ss_pia": 3400,
+          "ss_claim_age": 67
+        },
+        {
+          "name": "Sam",
+          "dob": "1970-09-22",
+          "retirement_date": "2029-01-01",
+          "life_expectancy": 95,
+          "ss_pia": 2100,
+          "ss_claim_age": 67
+        }
+      ],
+      "accounts": [
+        {
+          "name": "Joint brokerage",
+          "owner": "Alex",
+          "type": "taxable",
+          "balance": 450000,
+          "cost_basis": 300000,
+          "cash": 5,
+          "stocks": 70,
+          "bonds": 25,
+          "tips": 0.0,
+          "moneymarket": 0.0,
+          "treasuries": 0.0
+        },
+        {
+          "name": "Alex 401k",
+          "owner": "Alex",
+          "type": "trad",
+          "balance": 900000,
+          "cost_basis": 0,
+          "cash": 0.0,
+          "stocks": 60,
+          "bonds": 40,
+          "tips": 0.0,
+          "moneymarket": 0.0,
+          "treasuries": 0.0
+        },
+        {
+          "name": "Sam IRA",
+          "owner": "Sam",
+          "type": "trad",
+          "balance": 350000,
+          "cost_basis": 0,
+          "cash": 0.0,
+          "stocks": 60,
+          "bonds": 30,
+          "tips": 10,
+          "moneymarket": 0.0,
+          "treasuries": 0.0
+        },
+        {
+          "name": "Alex Roth",
+          "owner": "Alex",
+          "type": "roth",
+          "balance": 120000,
+          "cost_basis": 60000,
+          "cash": 0.0,
+          "stocks": 100,
+          "bonds": 0,
+          "tips": 0.0,
+          "moneymarket": 0.0,
+          "treasuries": 0.0
+        },
+        {
+          "name": "Sam Roth",
+          "owner": "Sam",
+          "type": "roth",
+          "balance": 80000,
+          "cost_basis": 50000,
+          "cash": 0.0,
+          "stocks": 100,
+          "bonds": 0,
+          "tips": 0.0,
+          "moneymarket": 0.0,
+          "treasuries": 0.0
+        }
+      ],
+      "cashflows": [
+        {
+          "kind": "income",
+          "title": "Alex salary",
+          "owner": "Alex",
+          "start": "",
+          "end": "retirement",
+          "amount": 175000,
+          "frequency": "yearly",
+          "indexing": "inflation",
+          "rate": 0,
+          "tax_type": "wages",
+          "category": ""
+        },
+        {
+          "kind": "income",
+          "title": "Sam salary",
+          "owner": "Sam",
+          "start": "",
+          "end": "retirement",
+          "amount": 85000,
+          "frequency": "yearly",
+          "indexing": "inflation",
+          "rate": 0,
+          "tax_type": "wages",
+          "category": ""
+        },
+        {
+          "kind": "expense",
+          "title": "Living expenses",
+          "owner": "",
+          "start": "",
+          "end": "",
+          "amount": 6500,
+          "frequency": "monthly",
+          "indexing": "inflation",
+          "rate": 0,
+          "tax_type": "",
+          "category": "living"
+        },
+        {
+          "kind": "expense",
+          "title": "Mortgage P&I",
+          "owner": "",
+          "start": "",
+          "end": "2034-06",
+          "amount": 2400,
+          "frequency": "monthly",
+          "indexing": "none",
+          "rate": 0,
+          "tax_type": "",
+          "category": "housing"
+        },
+        {
+          "kind": "expense",
+          "title": "Property tax & insurance",
+          "owner": "",
+          "start": "",
+          "end": "",
+          "amount": 9000,
+          "frequency": "yearly",
+          "indexing": "inflation",
+          "rate": 0,
+          "tax_type": "",
+          "category": "housing"
+        },
+        {
+          "kind": "expense",
+          "title": "College tuition",
+          "owner": "",
+          "start": "2027-08",
+          "end": "2031-05",
+          "amount": 32000,
+          "frequency": "yearly",
+          "indexing": "college",
+          "rate": 0,
+          "tax_type": "",
+          "category": "college"
+        },
+        {
+          "kind": "expense",
+          "title": "Employer health premium",
+          "owner": "",
+          "start": "",
+          "end": "2029-01",
+          "amount": 450,
+          "frequency": "monthly",
+          "indexing": "healthcare",
+          "rate": 0,
+          "tax_type": "",
+          "category": "healthcare"
+        },
+        {
+          "kind": "expense",
+          "title": "Out-of-pocket medical",
+          "owner": "",
+          "start": "",
+          "end": "",
+          "amount": 4000,
+          "frequency": "yearly",
+          "indexing": "healthcare",
+          "rate": 0,
+          "tax_type": "",
+          "category": "healthcare"
+        },
+        {
+          "kind": "expense",
+          "title": "Travel (go-go years)",
+          "owner": "",
+          "start": "2029",
+          "end": "2040",
+          "amount": 15000,
+          "frequency": "yearly",
+          "indexing": "inflation",
+          "rate": 0,
+          "tax_type": "",
+          "category": "travel"
+        },
+        {
+          "kind": "expense",
+          "title": "Replace car",
+          "owner": "",
+          "start": "2032-05",
+          "end": "",
+          "amount": 40000,
+          "frequency": "one-time",
+          "indexing": "inflation",
+          "rate": 0,
+          "tax_type": "",
+          "category": "auto"
+        }
+      ],
+      "deposits": [
+        {
+          "title": "Alex 401k deferral",
+          "account": "Alex 401k",
+          "start": "",
+          "end": "retirement",
+          "amount": 24500,
+          "frequency": "yearly",
+          "indexing": "none",
+          "rate": 0,
+          "source": "payroll"
+        },
+        {
+          "title": "Alex 401k match",
+          "account": "Alex 401k",
+          "start": "",
+          "end": "retirement",
+          "amount": 8000,
+          "frequency": "yearly",
+          "indexing": "none",
+          "rate": 0,
+          "source": "employer"
+        },
+        {
+          "title": "Sam Roth IRA",
+          "account": "Sam Roth",
+          "start": "",
+          "end": "retirement",
+          "amount": 7500,
+          "frequency": "yearly",
+          "indexing": "none",
+          "rate": 0,
+          "source": "cash"
+        }
+      ],
+      "withdrawals": [],
+      "ladders": [
+        {
+          "name": "TIPS bridge",
+          "account": "Alex 401k",
+          "kind": "TIPS",
+          "mode": "fixed",
+          "years": 5,
+          "start": "2029",
+          "end": "",
+          "annual_amount": 30000,
+          "yield_pct": 1.8
+        }
+      ],
+      "roth": {
+        "mode": "optimize",
+        "fixed_amount": 50000.0,
+        "start_year": 0,
+        "end_year": 0,
+        "max_bracket": 22,
+        "irmaa_max_tier": 0,
+        "ltcg_zero": false,
+        "aca_max_fpl": 400,
+        "priority": "older first"
+      },
+      "settings": {
+        "start_year": 2026,
+        "state": "North Carolina",
+        "state_rate": 5.0,
+        "inflation": 2.5,
+        "healthcare_inflation": 5.0,
+        "college_inflation": 4.0,
+        "ret_cash": 0.5,
+        "ret_stocks": 7.0,
+        "ret_bonds": 4.5,
+        "ret_tips": 4.0,
+        "ret_moneymarket": 3.0,
+        "ret_treasuries": 4.0,
+        "dividend_yield": 1.5,
+        "allocation_preset": "Custom (per account)",
+        "withdrawal_order": "tax_smart",
+        "tax_smart_bracket": 12.0,
+        "surplus_account": "Joint brokerage",
+        "dependents": 0,
+        "aca_enabled": true,
+        "aca_benchmark": 11000.0,
+        "aca_enhanced": false,
+        "medicare_other": 250.0,
+        "prior_magi": 0.0,
+        "heir_tax_rate": 24.0,
+        "historical_wrap": false,
+        "autopilot_enabled": true,
+        "autopilot_pct": 4.0,
+        "autopilot_real_return": 3.0,
+        "optimize_basis": "historical"
+      }
+    }
+  ]
+}

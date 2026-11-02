@@ -1,0 +1,10 @@
+# Runtime
+plotly==7.1.0
+narwhals==2.28.0          # plotly dependency
+# wxPython has no Linux wheels on PyPI. Use the distro package and create the venv
+# with --system-site-packages (see README). On Windows/macOS, pip installs a wheel.
+wxPython>=4.2.1
+
+# Development
+pytest>=7.4
+pyflakes>=3.0
