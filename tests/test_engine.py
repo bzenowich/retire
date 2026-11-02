@@ -2,7 +2,8 @@ import pytest
 
 from retire import analysis, benefits as bn, markets, tax as tx
 from retire.engine import plan_years, simulate
-from retire.model import Account, CashFlow, Ladder, Person, Plan, Settings, example_plan, load_workspace, save_workspace
+from retire.model import (Account, CashFlow, Ladder, Person, Plan, RothStrategy, Settings, WithdrawalRule,
+                          example_plan, load_workspace, save_workspace)
 
 
 def test_federal_brackets_mfj_2026():
@@ -158,3 +159,77 @@ def test_yale_rule_first_year_and_smoothing():
     assert first["rule_withdrawal"] == pytest.approx(0.05 * 1_000_000)
     nw = first["net_worth"]
     assert second["rule_withdrawal"] == pytest.approx(0.3 * 0.05 * nw + 0.7 * first["rule_withdrawal"] * 1.03)
+
+
+def young_plan(dob="1975-01-01", retire="2026-01-01", taxable=400_000, **kw):
+    p = simple_plan(**kw)
+    p.people[0].dob, p.people[0].retirement_date = dob, retire
+    p.accounts[1].balance = p.accounts[1].cost_basis = taxable
+    p.settings.yale_enabled = False
+    return p
+
+
+def test_sepp_is_penalty_free_fixed_and_locks_the_account():
+    p = young_plan()
+    p.withdrawals = [WithdrawalRule("SEPP", "IRA", "2026", "", "amortization", 5.0, "SEPP")]
+    r = simulate(p)
+    pay = 800_000 * 0.05 / (1 - 1.05 ** -35.3)          # age 51 single-life factor
+    rows = {x["year"]: x for x in r.rows}
+    for y in range(2026, 2035):                          # until the year after 59½ (2034)
+        assert rows[y]["scheduled"] == pytest.approx(pay, rel=1e-6)
+        assert rows[y]["penalty"] == 0
+        assert rows[y]["conversion"] == 0
+    assert rows[2035]["scheduled"] == 0
+
+
+def test_sepp_stopped_early_recaptures_penalty():
+    p = young_plan()
+    p.withdrawals = [WithdrawalRule("SEPP", "IRA", "2026", "2029", "fixed", 30_000, "SEPP")]
+    rows = {x["year"]: x for x in simulate(p).rows}
+    assert rows[2028]["penalty"] == 0
+    assert rows[2029]["penalty"] == pytest.approx(0.10 * 3 * 30_000)
+
+
+def test_sepp_account_tapped_for_required_spending_busts_it():
+    p = young_plan(taxable=0)
+    p.cashflows[0].amount = 8_000
+    p.withdrawals = [WithdrawalRule("SEPP", "IRA", "2026", "", "fixed", 20_000, "SEPP")]
+    r = simulate(p)
+    assert r.rows[0]["shortfall"] < 1.0                    # the engine's failure threshold
+    assert r.rows[0]["penalty"] > 0.10 * 20_000           # this year's payment recaptured too
+    assert r.rows[1]["scheduled"] == 0                    # busted: payments stop
+
+
+def test_inherited_ira_ten_year_rule():
+    p = young_plan()
+    p.accounts.append(Account("Inherited", "Pat", "trad", 300_000, 0, stocks=60, bonds=40))
+    p.roth = RothStrategy(mode="optimize", max_bracket=22)
+    p.settings.withdrawal_order = "taxable_trad_roth"
+    p.accounts[0].balance = 0
+    p.withdrawals = [WithdrawalRule("From mom", "Inherited", "2026", "", "minimum", 0, "Inherited IRA")]
+    rows = {x["year"]: x for x in simulate(p).rows}
+    assert all(rows[y]["scheduled"] == 0 for y in range(2026, 2035))
+    assert rows[2035]["scheduled"] > 300_000             # whole account in year 10
+    assert rows[2036]["bal_trad"] == 0
+    assert all(rows[y]["conversion"] == 0 for y in range(2026, 2036))
+    assert all(rows[y]["penalty"] == 0 for y in range(2026, 2036))
+
+
+def test_inherited_ira_annual_rmds():
+    p = young_plan()
+    p.accounts[0].balance = 0
+    p.accounts.append(Account("Inherited", "Pat", "trad", 300_000, 0, stocks=60, bonds=40))
+    p.withdrawals = [WithdrawalRule("From mom", "Inherited", "2026", "", "minimum", 0, "Inherited IRA", True)]
+    rows = simulate(p).rows
+    assert rows[0]["scheduled"] == pytest.approx(300_000 / 35.3)
+    assert rows[0]["rmd"] == 0                            # not part of Pat's own RMDs
+
+
+def test_rule_of_55():
+    def penalty(dob, kind):
+        p = young_plan(dob=dob, taxable=0)
+        p.withdrawals = [WithdrawalRule("401k", "IRA", "", "", "fixed", 0, kind)]
+        return simulate(p).rows[0]["penalty"]
+    assert penalty("1970-06-01", "Rule of 55") == 0       # separated in the year they turn 56
+    assert penalty("1970-06-01", "Other") > 0
+    assert penalty("1972-06-01", "Rule of 55") > 0        # separated at 54: no exception

@@ -107,6 +107,21 @@ class MainFrame(wx.Frame):
     def _account_names(self):
         return [a.name for a in self.plan.accounts]
 
+    def _flow_cols(self):
+        return [
+            Col("title", "Title", width=200),
+            Col("owner", "Owner", "choice", self._owner_choices, width=80),
+            Col("start", "Start", width=90),
+            Col("end", "End", width=90),
+            Col("amount", "Amount", "float", width=90),
+            Col("frequency", "Frequency", "choice", m.FREQUENCIES, width=90),
+            Col("indexing", "Grows with", "choice", m.INDEXING, width=95),
+            Col("rate", "Custom %", "float", width=70),
+        ]
+
+    DATES_HELP = ("Dates: YYYY, YYYY-MM or YYYY-MM-DD; blank start = plan start, blank end = plan end. "
+                  "End is exclusive; 'retirement' or 'death' ties it to the owner.")
+
     def _tab_household(self):
         p = self._scrolled("Household")
         s = wx.BoxSizer(wx.VERTICAL)
@@ -121,6 +136,14 @@ class MainFrame(wx.Frame):
             "Dates are YYYY-MM-DD. SS benefit is your Primary Insurance Amount from ssa.gov, in today's dollars.")
         self.people_tbl.SetMinSize((-1, 200))
         s.Add(self.people_tbl, 0, wx.EXPAND | wx.ALL, 6)
+        self.income_tbl = TableEditor(
+            p, "Income", self._flow_cols() + [Col("tax_type", "Tax type", "choice", m.INCOME_TAX_TYPES, width=100)],
+            lambda: m.CashFlow(kind="income", title="New income", tax_type="ordinary", frequency="yearly"),
+            self._changed, self.DATES_HELP + "\nAmounts are per occurrence in today's dollars (yearly = annual "
+            "rate, prorated for partial years). A home sale can be one-time 'tax-free' (excluded gain) or "
+            "'ltcg' income.")
+        self.income_tbl.SetMinSize((-1, 200))
+        s.Add(self.income_tbl, 0, wx.EXPAND | wx.ALL, 6)
         self.settings_form = Form(p, "Assumptions", [
             Col("start_year", "Plan start year", "int", width=80),
             Col("inflation", "Inflation %", "float", width=80),
@@ -176,28 +199,10 @@ class MainFrame(wx.Frame):
     def _tab_cashflows(self):
         p = self._scrolled("Cash Flow")
         s = wx.BoxSizer(wx.VERTICAL)
-        common = [
-            Col("title", "Title", width=200),
-            Col("owner", "Owner", "choice", self._owner_choices, width=80),
-            Col("start", "Start", width=90),
-            Col("end", "End", width=90),
-            Col("amount", "Amount", "float", width=90),
-            Col("frequency", "Frequency", "choice", m.FREQUENCIES, width=90),
-            Col("indexing", "Grows with", "choice", m.INDEXING, width=95),
-            Col("rate", "Custom %", "float", width=70),
-        ]
-        dates_help = ("Dates: YYYY, YYYY-MM or YYYY-MM-DD; blank start = plan start, blank end = plan end. "
-                      "End is exclusive; 'retirement' or 'death' ties it to the owner. Amounts are per "
-                      "occurrence in today's dollars (yearly = annual rate, prorated for partial years).")
-        self.income_tbl = TableEditor(
-            p, "Income", common + [Col("tax_type", "Tax type", "choice", m.INCOME_TAX_TYPES, width=100)],
-            lambda: m.CashFlow(kind="income", title="New income", tax_type="ordinary", frequency="yearly"),
-            self._changed, dates_help + "\nA home sale can be one-time 'tax-free' (excluded gain) or 'ltcg' income.")
-        self.income_tbl.SetMinSize((-1, 200))
-        s.Add(self.income_tbl, 0, wx.EXPAND | wx.ALL, 6)
         self.expense_tbl = TableEditor(
-            p, "Expenses (required spending)", common + [Col("category", "Category", width=120)],
+            p, "Expenses (required spending)", self._flow_cols() + [Col("category", "Category", width=120)],
             lambda: m.CashFlow(kind="expense", title="New expense"), self._changed,
+            self.DATES_HELP + " Amounts are per occurrence in today's dollars.\n"
             "Housing, college, healthcare (ACA/Medicare/IRMAA premiums are added automatically), etc. "
             "Shortfalls against these count as plan failure.")
         self.expense_tbl.SetMinSize((-1, 280))
@@ -216,6 +221,27 @@ class MainFrame(wx.Frame):
             "employer = match/contribution that costs you nothing.")
         self.dep_tbl.SetMinSize((-1, 190))
         s.Add(self.dep_tbl, 0, wx.EXPAND | wx.ALL, 6)
+        self.wd_tbl = TableEditor(p, "Scheduled withdrawals", [
+            Col("kind", "Type", "choice", m.WITHDRAWAL_KINDS, width=110),
+            Col("title", "Title", width=160),
+            Col("account", "From account", "choice", self._account_names, width=140),
+            Col("start", "Start", width=80), Col("end", "End", width=90),
+            Col("mode", "Method", "choice", m.WITHDRAWAL_MODES, width=110,
+                tip="fixed = today's $/yr (SEPP: fixed nominal $); percent = % of prior year-end balance; "
+                    "amortization = SEPP amortization (amount = interest %, 0 = 5%); "
+                    "even = spread to the deadline; minimum = only what's required"),
+            Col("amount", "Amount", "float", width=90),
+            Col("annual_rmd", "Decedent took RMDs", "bool", width=140),
+        ], lambda: m.WithdrawalRule(account=(self._account_names() or [""])[0]), self._changed,
+            "Money taken from one account whether or not it's needed (extra is saved to the surplus account).\n"
+            "SEPP: 72(t) payments, penalty-free before 59½; method fixed or amortization; runs to the later of "
+            "5 years or 59½ (blank end). Stopping early or tapping the account owes 10% on every earlier "
+            "payment.\nInherited IRA: 10-year rule (start = year after the death; blank end = start + 10); "
+            "emptied in the last year, never penalized, not convertible; tick 'Decedent took RMDs' for "
+            "annual minimums.\nRule of 55: the employer plan is penalty-free after separating in or after "
+            "the year you turn 55 (amount 0 just lifts the penalty). Other: penalized before 59½.")
+        self.wd_tbl.SetMinSize((-1, 220))
+        s.Add(self.wd_tbl, 0, wx.EXPAND | wx.ALL, 6)
         self.lad_tbl = TableEditor(p, "CD / TIPS ladders", [
             Col("name", "Name", width=130),
             Col("account", "Held in", "choice", self._account_names, width=140),
@@ -418,6 +444,7 @@ class MainFrame(wx.Frame):
         self.income_tbl.bind(self.plan.cashflows, lambda c: c.kind == "income")
         self.expense_tbl.bind(self.plan.cashflows, lambda c: c.kind != "income")
         self.dep_tbl.bind(self.plan.deposits)
+        self.wd_tbl.bind(self.plan.withdrawals)
         self.lad_tbl.bind(self.plan.ladders)
         for f in (self.settings_form, self.health_form, self.alloc_form, self.returns_form,
                   self.spend_form):
@@ -477,7 +504,7 @@ class MainFrame(wx.Frame):
     def _changed_structure(self):
         # names of people/accounts feed choice lists elsewhere
         self._mark_dirty()
-        for t in (self.accounts_tbl, self.income_tbl, self.expense_tbl, self.dep_tbl, self.lad_tbl):
+        for t in (self.accounts_tbl, self.income_tbl, self.expense_tbl, self.dep_tbl, self.wd_tbl, self.lad_tbl):
             t.refresh()
 
     def _mark_dirty(self):
@@ -571,7 +598,7 @@ class MainFrame(wx.Frame):
     # ------------------------------------------------------------ background jobs
     def _flush_edits(self):
         for t in (self.people_tbl, self.accounts_tbl, self.income_tbl, self.expense_tbl, self.dep_tbl,
-                  self.lad_tbl):
+                  self.wd_tbl, self.lad_tbl):
             if t.grid.IsCellEditControlEnabled():
                 t.grid.SaveEditControlValue()
                 t.grid.DisableCellEditControl()
@@ -589,9 +616,60 @@ class MainFrame(wx.Frame):
         for a in p.accounts:
             if a.owner not in self._people_names():
                 problems.append(f"Account '{a.name}' has unknown owner '{a.owner}'.")
+        problems += self._check_withdrawals()
         if problems:
             wx.MessageBox("\n".join(problems), "Check the plan", wx.ICON_WARNING, self)
         return not any("unknown owner" in x or "at least one" in x or "unique" in x for x in problems)
+
+    def _dep_end_year(self, d):
+        """Exclusive end year of a contribution (rough: 'retirement' ends in that year)."""
+        t = (d.end or "").strip().lower()
+        a = next((x for x in self.plan.accounts if x.name == d.account), None)
+        owner = self.plan.person(a.owner) if a else None
+        if t == "retirement" and owner:
+            return owner.retire.year + (0 if (owner.retire.month, owner.retire.day) == (1, 1) else 1)
+        if t == "death" and owner:
+            return owner.death_year + 1
+        e = m.parse_date(d.end, None)
+        return e.year if e else 9999
+
+    def _check_withdrawals(self):
+        p, out = self.plan, []
+        accts = {a.name: a for a in p.accounts}
+        modes = {"SEPP": ("fixed", "amortization"), "Inherited IRA": ("fixed", "percent", "even", "minimum"),
+                 "Rule of 55": ("fixed", "percent"), "Other": ("fixed", "percent")}
+        for w in p.withdrawals:
+            a = accts.get(w.account)
+            name = f"Scheduled withdrawal '{w.title}'"
+            if a is None:
+                out.append(f"{name}: unknown account '{w.account}' (ignored).")
+                continue
+            if w.mode not in modes.get(w.kind, ()):
+                out.append(f"{name}: method '{w.mode}' doesn't apply to {w.kind}; use "
+                           f"{' or '.join(modes.get(w.kind, ('fixed',)))}.")
+            if w.kind != "Other" and a.type == "taxable":
+                out.append(f"{name}: {w.kind} only applies to retirement accounts, not '{a.name}'.")
+            person = p.person(a.owner)
+            if person is None:
+                continue
+            start = m.parse_date(w.start, None)
+            sy = start.year if start else p.settings.start_year
+            if w.kind == "SEPP":
+                half = person.birth.year + 59 + (1 if person.birth.month > 6 else 0)
+                min_end = max(sy + 5, half + 1)
+                end = m.parse_date(w.end, None)
+                if end and end.year < min_end:
+                    out.append(f"{name}: ends before {min_end} (later of 5 years or 59½), so 10% of every "
+                               f"earlier payment is recaptured.")
+            if w.kind == "Rule of 55" and person.retire.year < person.birth.year + 55:
+                out.append(f"{name}: {person.name} separates before the year they turn 55, so the Rule of 55 "
+                           f"doesn't apply.")
+            if w.kind in ("SEPP", "Inherited IRA") and any(
+                    d.account == a.name and (w.kind == "Inherited IRA" or self._dep_end_year(d) > sy)
+                    for d in p.deposits):
+                out.append(f"{name}: contributions into '{a.name}' are not allowed for a {w.kind} "
+                           f"(the model still adds them).")
+        return out
 
     def _background(self, label, work, done, gauge=None):
         if self._busy:
@@ -703,7 +781,7 @@ class MainFrame(wx.Frame):
         for label, key in (("Wages", "wages"), ("Soc. Sec.", "ss_total"), ("Other income", "other_income"),
                            ("Expenses", "expenses"), ("ACA net", "aca_premium"), ("ACA subsidy", "aca_subsidy"),
                            ("Medicare", "medicare"), ("IRMAA", "irmaa"), ("Deposits", "deposits"),
-                           ("RMD", "rmd"), ("Withdrawals", "withdrawals"), ("Yale rule", "rule_withdrawal"),
+                           ("RMD", "rmd"), ("Scheduled", "scheduled"), ("Withdrawals", "withdrawals"), ("Yale rule", "rule_withdrawal"),
                            ("Discretionary", "discretionary"), ("Surplus saved", "surplus"),
                            ("Roth conv.", "conversion"),
                            ("Fed tax", "fed_tax"), ("State tax", "state_tax"), ("FICA", "fica"),

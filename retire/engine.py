@@ -93,6 +93,43 @@ class Simulator:
                                     {"moneymarket": 1.0}, synthetic=True))
         self.by_name = {a.name: i for i, a in enumerate(self.accts)}
         self._names = {p.name: i for i, p in enumerate(self.people)}
+        self._build_withdrawals()
+
+    def _build_withdrawals(self):
+        """Resolve scheduled withdrawals: years, special kinds, per-account flags."""
+        self.sched = []
+        self.inherited = set()      # never penalized, outside the owner's RMDs, no conversions
+        self.rule55 = {}            # account -> first penalty-free year
+        for w in self.plan.withdrawals:
+            ai = self.by_name.get(w.account)
+            if ai is None:
+                continue
+            a = self.accts[ai]
+            ws = parse_date(w.start, date(self.y0, 1, 1)).year
+            p = self.plan.person(a.owner) or self.people[0]
+            r = {"rule": w, "ai": ai, "start": ws, "owner": p}
+            if w.kind == "Inherited IRA":
+                r["end"] = parse_date(w.end, date(ws + 10, 1, 1)).year if w.end.strip() else ws + 10
+                r["age0"] = ws - p.birth.year
+                self.inherited.add(ai)
+            elif w.kind == "SEPP":
+                half = p.birth.year + 59 + (1 if p.birth.month > 6 else 0)   # year they reach 59½
+                r["min_end"] = max(ws + 5, half + 1)
+                r["end"] = self._end_date(w.end, a.owner).year if w.end.strip() else r["min_end"]
+                r["payment"] = None             # fixed in the first year
+                r["paid"] = 0.0                 # penalty-free payments so far (recapture base)
+                r["busted"] = False
+            else:
+                r["end"] = self._end_date(w.end, a.owner).year
+                if w.kind == "Rule of 55":
+                    sep = p.retire.year
+                    if sep >= p.birth.year + 55:
+                        self.rule55[ai] = min(self.rule55.get(ai, sep), sep)
+            self.sched.append(r)
+
+    def _active_sepp(self, y):
+        return [r for r in self.sched if r["rule"].kind == "SEPP" and not r["busted"]
+                and r["start"] <= y < r["end"] and y <= r["owner"].death_year]
 
     def _end_date(self, text, owner):
         t = (text or "").strip().lower()
@@ -169,6 +206,11 @@ class Simulator:
             early = [p.age_at(mid) < 59.5 for p in people]
             acct_owner = [self._owner_index(a.owner, alive) for a in accts]
             acct_early = [early[o] for o in acct_owner]
+            for ai in self.inherited:
+                acct_early[ai] = False
+            for ai, y55 in self.rule55.items():
+                if y >= y55:
+                    acct_early[ai] = False
             row = {"year": y, "cpi": cpi}
             start_totals = [a.total for a in accts]     # Dec 31 of the prior year
             start_total = sum(start_totals)
@@ -317,7 +359,7 @@ class Simulator:
             # (pro-rata here, selling ladder rungs if the cash part runs short).
             by_owner = {}
             for i, a in enumerate(accts):
-                if a.type == "trad":
+                if a.type == "trad" and i not in self.inherited:
                     by_owner.setdefault(acct_owner[i], []).append(i)
             rmd_req = 0.0
             for o, idxs in by_owner.items():
@@ -349,26 +391,71 @@ class Simulator:
             forced_cash += rmd_total
             f_ord += rmd_total
             f_ret += rmd_total
-            for w in self.plan.withdrawals:
-                ai = self.by_name.get(w.account)
-                if ai is None:
-                    continue
+            scheduled = 0.0
+            for r in self.sched:
+                w, ai = r["rule"], r["ai"]
                 a = accts[ai]
-                ws = parse_date(w.start, date(self.y0, 1, 1)).year
-                we = self._end_date(w.end, a.owner).year
-                if not ws <= y < we:
-                    continue
-                amt = a.bal * w.amount / 100 if w.mode == "percent" else w.amount * cpi
+                ws, we = r["start"], r["end"]
+                prior = start_totals[ai]
+                is_early = acct_early[ai]
+                if w.kind == "SEPP":
+                    if r["busted"]:
+                        continue
+                    if y == we and we < r["min_end"] and r["paid"] and y <= r["owner"].death_year:
+                        f_pen += r["paid"]          # stopped early: 10% recapture of every payment
+                        r["busted"] = True
+                        continue
+                    if not ws <= y < we or y > r["owner"].death_year:
+                        continue
+                    if r["payment"] is None:
+                        age = y - r["owner"].birth.year
+                        n = td.single_life(age)
+                        if w.mode == "amortization":
+                            i = (w.amount or 5.0) / 100
+                            r["payment"] = prior * i / (1 - (1 + i) ** -n)
+                        elif w.mode == "percent":            # not a valid SEPP; treat as one payment
+                            r["payment"] = prior * w.amount / 100
+                        else:
+                            r["payment"] = w.amount * cpi    # today's $ when it starts, then fixed
+                    amt = r["payment"]
+                elif w.kind == "Inherited IRA":
+                    if y < ws or a.bal <= 0:
+                        continue
+                    left = we - y                            # years left including this one
+                    if left <= 1:
+                        req = a.bal                          # deadline: empty the account
+                    elif w.annual_rmd:
+                        req = prior / max(1.0, td.single_life(r["age0"]) - (y - ws))
+                    else:
+                        req = 0.0
+                    if w.mode == "even":
+                        want = a.bal / max(1, left)
+                    elif w.mode == "percent":
+                        want = prior * w.amount / 100
+                    elif w.mode == "fixed":
+                        want = w.amount * cpi
+                    else:
+                        want = 0.0
+                    amt = max(req, want)
+                else:
+                    if not ws <= y < we:
+                        continue
+                    amt = prior * w.amount / 100 if w.mode == "percent" else w.amount * cpi
                 amt = max(0.0, min(amt, a.bal))
                 if amt <= 0:
                     continue
-                o, l, pe, rt = self._take(a, amt, acct_early[ai])
+                o, l, pe, rt = self._take(a, amt, is_early)
+                if w.kind == "SEPP":                 # penalty waived, kept for a recapture
+                    r["paid"] += pe
+                    pe = 0.0
                 f_ord += o
                 f_ltcg += l
                 f_pen += pe
                 f_ret += rt
                 withdrawn[ai] += amt
                 forced_cash += amt
+                scheduled += amt
+            row["scheduled"] = scheduled
             row["rmd"] = rmd_total
             row["rmd_required"] = rmd_req
 
@@ -409,6 +496,9 @@ class Simulator:
                 aca_months=aca_months, household=household, acct_early=acct_early,
                 ladder_cash=ladder_cash,
             )
+            sepp_now = self._active_sepp(y)
+            base["locked"] = {r["ai"]: r["paid"] for r in sepp_now}
+            base["no_convert"] = self.inherited | set(base["locked"])
 
             # ---- Yale endowment rule: portfolio withdrawal budget
             #   first year: rate x portfolio
@@ -428,7 +518,8 @@ class Simulator:
             conv_target = 0.0
             r_start = roth_cfg.start_year or self.y0
             r_end = roth_cfg.end_year or self.y1
-            trad_avail = sum(a.bal for a in accts if a.type == "trad")
+            trad_avail = sum(a.bal for i, a in enumerate(accts)
+                             if a.type == "trad" and i not in base["no_convert"])
             if roth_cfg.mode != "none" and r_start <= y <= r_end and trad_avail > 0:
                 if roth_cfg.mode == "fixed":
                     conv_target = min(trad_avail, roth_cfg.fixed_amount * cpi)
@@ -440,6 +531,9 @@ class Simulator:
             for i, a in enumerate(accts):
                 a.bal, a.basis = sol["bal"][i], sol["basis"][i]
                 withdrawn[i] += sol["draws"][i]
+            for r in sepp_now:
+                if sol["draws"][r["ai"]] > 0:
+                    r["busted"] = True                 # recapture was charged in _solve
             # required = need + forced (net of income); rule money beyond it is spent
             port_out = forced_cash + sum(sol["draws"])
             required = sol["need"] + forced_cash
@@ -540,7 +634,8 @@ class Simulator:
 
     def _conversion_order(self, bal, ctx):
         people, pr = self.people, self.plan.roth.priority
-        trads = [i for i, a in enumerate(self.accts) if a.type == "trad" and bal[i] > 0]
+        skip = ctx.get("no_convert", ())
+        trads = [i for i, a in enumerate(self.accts) if a.type == "trad" and bal[i] > 0 and i not in skip]
         owner = lambda i: self._owner_index(self.accts[i].owner, ctx["alive"])
         if pr == "older first":
             trads.sort(key=lambda i: people[owner(i)].birth)
@@ -565,6 +660,7 @@ class Simulator:
         basis0 = [a.basis for a in accts]
         types = [a.type for a in accts]
         early = ctx["acct_early"]
+        locked = ctx.get("locked", {})
 
         # apply conversion
         conv_bal, conv_basis = bal0[:], basis0[:]
@@ -596,6 +692,7 @@ class Simulator:
 
         floor = ctx.get("floor", 0.0)
         need = max(0.0, ctx["fixed_need"], floor)
+        req = max(0.0, ctx["fixed_need"])           # required spending (no rule budget)
         prev = None
         headroom = 0.0
         result = None
@@ -604,12 +701,17 @@ class Simulator:
             draws = [0.0] * nA
             comp = {"o": 0.0, "l": 0.0, "pe": 0.0, "rt": 0.0}
             remaining = need
+            allow_locked = False
 
             def take(i, amt):
                 nonlocal remaining
+                if i in locked and not allow_locked:
+                    return
                 amt = min(amt, bal[i], remaining)
                 if amt <= 1e-9:
                     return
+                if i in locked and draws[i] == 0:
+                    comp["pe"] += locked[i]          # busting a SEPP: 10% on all earlier payments
                 if types[i] == "taxable":
                     frac = basis[i] / bal[i] if bal[i] > 0 else 1.0
                     comp["l"] += amt * (1 - frac)
@@ -666,6 +768,14 @@ class Simulator:
                         for i in idx:
                             take(i, remaining)
 
+            # tapping a SEPP account busts it, so only for required spending
+            unfunded = max(0.0, req - (need - remaining)) if locked else 0.0
+            if unfunded > 0:
+                allow_locked, keep = True, remaining
+                remaining = unfunded
+                for i in locked:
+                    take(i, remaining)
+                remaining = keep - (unfunded - remaining)
             short = max(0.0, remaining)
             ti = tx.TaxInput(
                 year=ctx["y"], filing=ctx["filing"], index=ctx["tix"], wages=ctx["wages"],
@@ -685,6 +795,7 @@ class Simulator:
             result = dict(bal=bal, basis=basis, draws=draws, tax=T, aca_net=aca_net, aca_sub=aca_sub,
                           fpl_pct=fpl_pct, need=new_need, short=short, conv=conv_done,
                           ord_taxable=ord_taxable, magi_aca=T.magi_aca)
+            req = max(0.0, new_need)
             target = max(0.0, new_need, floor)
             if prev is not None and abs(target - need) < 0.5:
                 break

@@ -10,6 +10,8 @@ FREQUENCIES = ["one-time", "weekly", "bi-weekly", "monthly", "yearly"]
 INDEXING = ["inflation", "none", "healthcare", "college", "custom"]
 INCOME_TAX_TYPES = ["wages", "ordinary", "pension", "ltcg", "tax-free"]
 DEPOSIT_SOURCES = ["cash", "payroll", "employer"]
+WITHDRAWAL_KINDS = ["Other", "SEPP", "Inherited IRA", "Rule of 55"]
+WITHDRAWAL_MODES = ["fixed", "percent", "amortization", "even", "minimum"]
 WITHDRAWAL_ORDERS = {
     "tax_smart": "Tax-smart: fill bracket from Trad, then Taxable, Roth last",
     "taxable_trad_roth": "Taxable → Trad → Roth (conventional)",
@@ -125,12 +127,38 @@ class Deposit:
 
 @dataclass
 class WithdrawalRule:
+    """A withdrawal forced from one account, whether or not the money is needed.
+
+    kind:
+      Other          penalized before 59½ like any other withdrawal.
+      SEPP           72(t) substantially equal periodic payments: penalty-free, fixed
+                     nominal payment, no other withdrawals from (or conversions out of)
+                     the account until the later of 5 years or 59½. Ending early or
+                     tapping the account recaptures 10% of all earlier SEPP payments.
+                     Blank end = the earliest allowed end.
+      Inherited IRA  10-year rule: never penalized, not counted in the owner's own RMDs,
+                     can't be converted, emptied in the year before 'end' (blank = start
+                     + 10 years, i.e. start = the year after the death). With
+                     `annual_rmd` (the decedent had begun RMDs) a single-life minimum
+                     is also taken each year.
+      Rule of 55     the account (an employer plan) is penalty-free from the owner's
+                     separation from service, if that is in or after the year they turn
+                     55. A zero amount only lifts the penalty.
+    mode:
+      fixed          today's $ per year (SEPP: nominal $, never indexed)
+      percent        % of the account's prior year-end balance
+      amortization   SEPP amortization method; amount = interest rate % (0 = 5%)
+      even           balance / years left until 'end' (inherited)
+      minimum        only what is required (inherited)
+    """
     title: str = "Scheduled withdrawal"
     account: str = ""
     start: str = ""
     end: str = ""
-    mode: str = "fixed"           # fixed (today's $ per year) | percent (of balance)
+    mode: str = "fixed"
     amount: float = 0.0
+    kind: str = "Other"
+    annual_rmd: bool = False
 
 
 @dataclass
