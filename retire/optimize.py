@@ -2,7 +2,7 @@
 
 Each candidate strategy is run through every historical start year (or a fixed
 Monte Carlo sample). Candidates are ranked by success rate, then by median
-"lifetime value" = discretionary (Autopilot) spending + ending after-tax wealth,
+"lifetime value" = discretionary (Yale rule) spending + ending after-tax wealth,
 both in today's dollars. The search is coordinate descent over the strategy
 dimensions, which needs far fewer runs than the full cross product.
 """

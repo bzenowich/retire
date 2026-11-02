@@ -186,9 +186,9 @@ class Settings:
     prior_magi: float = 0.0           # MAGI for the two years before start (IRMAA lookback)
     heir_tax_rate: float = 24.0       # used to value Trad balances after tax
     historical_wrap: bool = False
-    autopilot_enabled: bool = True    # Hebeler Autopilot II spending in retirement
-    autopilot_pct: float = 4.0        # first-year withdrawal, % of portfolio
-    autopilot_real_return: float = 3.0   # real return used in the PMT term
+    yale_enabled: bool = True         # Yale endowment spending rule in retirement
+    yale_rate: float = 5.0            # % of portfolio (first year, and the target term)
+    yale_weight: float = 70.0         # % weight on last year's withdrawal
     optimize_basis: str = "historical"   # historical | montecarlo
 
 

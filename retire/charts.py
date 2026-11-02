@@ -74,7 +74,7 @@ def cashflow(result, real=True):
                              mode="lines", line=dict(width=2, color=TEXT), hovertemplate="%{y:,.0f}k"))
     if any(r["discretionary"] for r in rows):
         total = [q + r["discretionary"] for q, r in zip(required, rows)]
-        fig.add_trace(go.Scatter(x=years, y=_k(total, defl), name="+ Autopilot discretionary",
+        fig.add_trace(go.Scatter(x=years, y=_k(total, defl), name="+ Yale-rule discretionary",
                                  mode="lines", line=dict(width=2, color=SERIES[6], dash="dash"),
                                  hovertemplate="%{y:,.0f}k"))
     fig.update_layout(barmode="stack", bargap=0.15)

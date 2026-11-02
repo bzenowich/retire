@@ -141,7 +141,7 @@ def test_rmd_uses_prior_year_end_and_aggregates_iras():
                   Account("Brokerage", "Pat", "taxable", 500_000, 400_000, stocks=60, bonds=40)]
     from retire.model import Deposit
     p.deposits = [Deposit("Rollover", "IRA A", "2026", "2027", 100_000, "one-time", "none", 0, "cash")]
-    p.settings.autopilot_enabled = False
+    p.settings.yale_enabled = False
     r = simulate(p)
     row = r.rows[0]
     assert row["rmd_required"] == pytest.approx(1_000_000 / 20.2)   # deposit not counted
@@ -149,14 +149,12 @@ def test_rmd_uses_prior_year_end_and_aggregates_iras():
     assert row["wd_IRA A"] > 0 and row["wd_IRA B"] > 0
 
 
-def test_autopilot_first_year_and_blend():
-    from retire.engine import pmt
+def test_yale_rule_first_year_and_smoothing():
     p = simple_plan()
-    p.settings.inflation = 0.0
+    p.settings.inflation = 3.0
     p.cashflows = []
     r = simulate(p)
     first, second = r.rows[0], r.rows[1]
-    start = 1_000_000
-    assert first["autopilot"] == pytest.approx(0.04 * start)
-    nw = r.rows[0]["net_worth"]
-    assert second["autopilot"] == pytest.approx(0.75 * first["autopilot"] + 0.25 * pmt(0.03, r.rows[-1]["year"] - 2027 + 1, nw))
+    assert first["rule_withdrawal"] == pytest.approx(0.05 * 1_000_000)
+    nw = first["net_worth"]
+    assert second["rule_withdrawal"] == pytest.approx(0.3 * 0.05 * nw + 0.7 * first["rule_withdrawal"] * 1.03)

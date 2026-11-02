@@ -23,15 +23,6 @@ from .model import ALLOCATION_PRESETS, parse_date
 PER_YEAR = {"weekly": 52, "bi-weekly": 26, "monthly": 12, "yearly": 1}
 
 
-def pmt(rate, years, pv):
-    """Level annual payment that spends `pv` over `years` at `rate`."""
-    if years <= 0:
-        return pv
-    if abs(rate) < 1e-9:
-        return pv / years
-    return pv * rate / (1 - (1 + rate) ** -years)
-
-
 @dataclass
 class Result:
     plan_name: str
@@ -158,7 +149,7 @@ class Simulator:
         rows, magi_hist = [], []
         success, first_short = True, None
         roth_cfg = self.plan.roth
-        # Autopilot II starts in the first full year everyone is retired
+        # the spending rule starts in the first full year everyone is retired
         ap_start = max(self.y0, max(p.retire.year + (0 if (p.retire.month, p.retire.day) == (1, 1) else 1)
                                     for p in people))
         ap_prev = None
@@ -419,17 +410,20 @@ class Simulator:
                 ladder_cash=ladder_cash,
             )
 
-            # ---- Hebeler Autopilot II: portfolio withdrawal budget
-            autopilot = 0.0
-            if y >= ap_start and s.autopilot_enabled:
+            # ---- Yale endowment rule: portfolio withdrawal budget
+            #   first year: rate x portfolio
+            #   then: (1 - w) x rate x portfolio + w x last year's withdrawal x (1 + inflation)
+            rule_wd = 0.0
+            if y >= ap_start and s.yale_enabled:
+                target = s.yale_rate / 100 * start_total
                 if ap_prev is None:
-                    autopilot = s.autopilot_pct / 100 * start_total
+                    rule_wd = target
                 else:
-                    autopilot = 0.75 * ap_prev * (1 + self.seq[t - 1]["inflation"]) + \
-                        0.25 * pmt(s.autopilot_real_return / 100, self.y1 - y + 1, start_total)
-                autopilot = max(0.0, min(autopilot, start_total))
-                ap_prev = autopilot
-            base["floor"] = max(0.0, autopilot - forced_cash)
+                    w = s.yale_weight / 100
+                    rule_wd = (1 - w) * target + w * ap_prev * (1 + self.seq[t - 1]["inflation"])
+                rule_wd = max(0.0, min(rule_wd, start_total))
+                ap_prev = rule_wd
+            base["floor"] = max(0.0, rule_wd - forced_cash)
 
             conv_target = 0.0
             r_start = roth_cfg.start_year or self.y0
@@ -446,10 +440,10 @@ class Simulator:
             for i, a in enumerate(accts):
                 a.bal, a.basis = sol["bal"][i], sol["basis"][i]
                 withdrawn[i] += sol["draws"][i]
-            # required = need + forced (net of income); Autopilot money beyond it is spent
+            # required = need + forced (net of income); rule money beyond it is spent
             port_out = forced_cash + sum(sol["draws"])
             required = sol["need"] + forced_cash
-            discretionary = max(0.0, min(port_out, autopilot) - required) if autopilot else 0.0
+            discretionary = max(0.0, min(port_out, rule_wd) - required) if rule_wd else 0.0
             discretionary = min(discretionary, max(0.0, port_out - required))
             surplus = max(0.0, port_out - required - discretionary)
             if surplus > 0:
@@ -493,7 +487,7 @@ class Simulator:
                 "agi": T.agi, "magi": T.magi_irmaa, "taxable_income": T.taxable_income,
                 "ordinary_taxable": sol["ord_taxable"],
                 "marginal": T.marginal, "surplus": surplus, "shortfall": sol["short"],
-                "autopilot": autopilot, "discretionary": discretionary,
+                "rule_withdrawal": rule_wd, "discretionary": discretionary,
             })
             for i, p in enumerate(people):
                 row[f"ss_{p.name}"] = ss[i]
@@ -696,7 +690,7 @@ class Simulator:
                 break
             prev = need
             need = target
-        # only required spending (not the Autopilot budget) counts as a shortfall
+        # only required spending (not the spending-rule budget) counts as a shortfall
         if result["need"] < 0:
             result["short"] = 0.0
         else:
@@ -774,7 +768,7 @@ class Simulator:
             "total_shortfall_real": tot("shortfall", True),
             "years": len(rows),
         }
-        # what the plan delivers: Autopilot spending above needs + what is left after tax
+        # what the plan delivers: rule spending above needs + what is left after tax
         summary["lifetime_value_real"] = summary["lifetime_discretionary_real"] + summary["end_after_tax_real"]
         return Result(self.plan.name, rows, success, first_short, summary)
 

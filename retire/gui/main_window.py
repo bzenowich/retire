@@ -292,14 +292,14 @@ class MainFrame(wx.Frame):
         s.Add(bar, 0, wx.ALL | wx.EXPAND, 6)
 
         row2 = wx.BoxSizer(wx.HORIZONTAL)
-        self.autopilot_form = Form(p, "Withdrawals: Hebeler Autopilot II", [
-            Col("autopilot_enabled", "Enabled", "bool"),
-            Col("autopilot_pct", "First-year withdrawal %", "float", width=60),
-            Col("autopilot_real_return", "PMT real return %", "float", width=60,
-                tip="Next year = 75% × last year (inflation-adjusted) + 25% × PMT(real return, "
-                    "years left in plan, portfolio)"),
+        self.spend_form = Form(p, "Withdrawals: Yale endowment rule", [
+            Col("yale_enabled", "Enabled", "bool"),
+            Col("yale_rate", "Withdrawal rate %", "float", width=60),
+            Col("yale_weight", "Weight on last year %", "float", width=60,
+                tip="First year = rate × portfolio. Then (1 − weight) × rate × portfolio + "
+                    "weight × last year's withdrawal × (1 + inflation)"),
         ], self._changed, columns=3)
-        row2.Add(self.autopilot_form, 0, wx.RIGHT, 8)
+        row2.Add(self.spend_form, 0, wx.RIGHT, 8)
         sbox = wx.StaticBoxSizer(wx.VERTICAL, p, "Strategy in use")
         self.strategy_label = wx.StaticText(sbox.GetStaticBox(), label="")
         sbox.Add(self.strategy_label, 1, wx.EXPAND | wx.ALL, 6)
@@ -420,7 +420,7 @@ class MainFrame(wx.Frame):
         self.dep_tbl.bind(self.plan.deposits)
         self.lad_tbl.bind(self.plan.ladders)
         for f in (self.settings_form, self.health_form, self.alloc_form, self.returns_form,
-                  self.autopilot_form):
+                  self.spend_form):
             f.bind(self.plan.settings)
         self._update_strategy_label()
         self._refresh_plan_list()
@@ -693,7 +693,7 @@ class MainFrame(wx.Frame):
             f"IRMAA: {s['lifetime_irmaa_real']:,.0f}   ACA subsidies: {s['lifetime_aca_subsidy_real']:,.0f}   "
             f"Roth conversions: {s['lifetime_conversions_real']:,.0f}   RMDs: {s['lifetime_rmd_real']:,.0f}   "
             f"penalties: {s['lifetime_penalty_real']:,.0f}\n"
-            f"Autopilot discretionary spending (today's $): {s['lifetime_discretionary_real']:,.0f}")
+            f"Yale-rule discretionary spending (today's $): {s['lifetime_discretionary_real']:,.0f}")
         self.proj_summary.GetParent().Layout()
         d = (lambda key, r: r[key] / r["cpi"]) if real else (lambda key, r: r[key])
         de = (lambda key, r: r[key] / r["end_cpi"]) if real else (lambda key, r: r[key])
@@ -703,7 +703,7 @@ class MainFrame(wx.Frame):
         for label, key in (("Wages", "wages"), ("Soc. Sec.", "ss_total"), ("Other income", "other_income"),
                            ("Expenses", "expenses"), ("ACA net", "aca_premium"), ("ACA subsidy", "aca_subsidy"),
                            ("Medicare", "medicare"), ("IRMAA", "irmaa"), ("Deposits", "deposits"),
-                           ("RMD", "rmd"), ("Withdrawals", "withdrawals"), ("Autopilot", "autopilot"),
+                           ("RMD", "rmd"), ("Withdrawals", "withdrawals"), ("Yale rule", "rule_withdrawal"),
                            ("Discretionary", "discretionary"), ("Surplus saved", "surplus"),
                            ("Roth conv.", "conversion"),
                            ("Fed tax", "fed_tax"), ("State tax", "state_tax"), ("FICA", "fica"),
